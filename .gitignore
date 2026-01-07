@@ -40,8 +40,6 @@
 # debug information files
 *.dwo
 
-backend/config.json
-
 # Logs
 logs
 *.log
@@ -78,3 +76,7 @@ coverage
 
 # Vitest
 __screenshots__/
+
+
+backend/config.json
+backend/llm_poc
