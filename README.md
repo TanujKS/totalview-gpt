@@ -102,6 +102,8 @@ totalview-gpt/
 
 ### Backend Setup
 
+**Note**: The `llm_poc` executable is not included in the repository and must be compiled before running.
+
 1. **Configure API key**:
    ```bash
    cd backend
@@ -111,20 +113,24 @@ totalview-gpt/
    }
    ```
 
-2. **Build for Linux**:
+2. **Build the executable** (required before running):
+
+   **For Linux**:
    ```bash
    cd backend
    chmod +x build.sh
    ./build.sh
    ```
+   This will create the `llm_poc` executable.
 
-3. **Build for Windows (32-bit)**:
+   **For Windows (32-bit)**:
    ```cmd
    cd backend
    build_windows.bat
    ```
+   This will create the `llm_poc.exe` executable.
 
-4. **Run the server**:
+3. **Run the server**:
    ```bash
    ./llm_poc  # or llm_poc.exe on Windows
    ```
@@ -153,12 +159,20 @@ totalview-gpt/
 
 ### Testing the Full Pipeline
 
-1. **Start the backend**:
+1. **Build and start the backend** (if not already built):
    ```bash
    cd backend
-   ./llm_poc
+   # Build the executable first (if not already built)
+   chmod +x build.sh
+   ./build.sh  # Linux
+   # OR build_windows.bat  # Windows
+   
+   # Then run the server
+   ./llm_poc  # or llm_poc.exe on Windows
    ```
    You should see: `Server starting on http://0.0.0.0:8080`
+   
+   **Note**: Make sure the `llm_poc` executable exists (it's built by the build script and not included in the repository).
 
 2. **Start the frontend**:
    ```bash
