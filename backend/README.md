@@ -17,25 +17,30 @@ The backend is a lightweight, embeddable HTTP server built with ISO C++17. It ha
 
 ## External Dependencies
 
-The backend currently relies on three external libraries:
+The backend currently relies on two external libraries and one Windows API:
 
-### 1. libcurl (`libcurl`)
-**Purpose**: HTTP/HTTPS client for communicating with OpenAI API
+### 1. WinHTTP (Windows HTTP Services API)
+**Purpose**: HTTP/HTTPS client for communicating with OpenAI API (Windows built-in, no external dependencies)
 
 **Usage**:
 - Makes HTTPS POST requests to `https://api.openai.com/v1/chat/completions`
-- Handles SSL/TLS encryption
+- Handles SSL/TLS encryption natively
 - Manages HTTP headers and request/response data
+- No installation required - part of Windows SDK
 
 **Key Functions Used**:
-- `curl_global_init()` - Initialize curl library
-- `curl_easy_init()` - Create curl handle
-- `curl_easy_setopt()` - Configure request options
-- `curl_easy_perform()` - Execute HTTP request
-- `curl_easy_getinfo()` - Get response status code
-- `curl_easy_cleanup()` - Cleanup resources
+- `WinHttpOpen()` - Initialize WinHTTP session
+- `WinHttpConnect()` - Connect to host
+- `WinHttpOpenRequest()` - Create HTTP request
+- `WinHttpSetOption()` - Set timeout options
+- `WinHttpAddRequestHeaders()` - Add HTTP headers
+- `WinHttpSendRequest()` - Send HTTP request with body
+- `WinHttpReceiveResponse()` - Receive HTTP response
+- `WinHttpQueryHeaders()` - Get response status code
+- `WinHttpReadData()` - Read response body
+- `WinHttpCloseHandle()` - Cleanup resources
 
-**Why it's needed**: Secure HTTPS communication with proper SSL certificate validation and HTTP protocol handling.
+**Why it's used**: Native Windows API that provides secure HTTPS communication with proper SSL certificate validation and HTTP protocol handling, without requiring external dependencies like libcurl. Perfect for 32-bit Windows builds.
 
 ### 2. httplib (`httplib.h`)
 **Purpose**: Simple HTTP server for handling incoming requests
@@ -76,29 +81,21 @@ The backend currently relies on three external libraries:
 
 ## Building Without External Libraries
 
-If you need to build this without external dependencies in the future, here's what would need to be replaced:
+The backend is already optimized for Windows builds with minimal dependencies:
 
-### Option 1: Replace libcurl
+### HTTP Client: WinHTTP (Already Implemented)
 
-**Alternatives**:
-1. **Windows**: Use WinHTTP API (`winhttp.h`)
-   ```cpp
-   #include <winhttp.h>
-   // Use WinHttpOpen, WinHttpConnect, WinHttpOpenRequest, etc.
-   ```
+The code uses WinHTTP API which is built into Windows, so no external dependencies are needed for HTTP/HTTPS client functionality. This makes 32-bit Windows builds straightforward without requiring libcurl.
 
-2. **Linux**: Use native socket APIs
-   - Create socket with `socket()`
-   - Connect with `connect()`
-   - Send/Receive with `send()/recv()`
-   - Implement SSL/TLS with OpenSSL or similar
+**Current Implementation**:
+- Uses `winhttp.h` (Windows SDK)
+- Native SSL/TLS support via WinHTTP
+- Proper certificate validation
+- No external library installation required
 
-3. **Cross-platform**: Implement minimal HTTP client
-   - Use platform-specific socket APIs
-   - Implement basic HTTP/1.1 protocol
-   - Add SSL/TLS support (OpenSSL, mbedTLS, or similar)
-
-**Complexity**: High - requires implementing HTTP protocol, SSL/TLS, and certificate validation.
+**For Linux builds** (if needed in future):
+- Could use native socket APIs with OpenSSL
+- Or use libcurl (as it's standard on Linux)
 
 ### Option 2: Replace httplib
 
@@ -148,6 +145,7 @@ If you need to build this without external dependencies in the future, here's wh
 
 ```bash
 # Install dependencies (Ubuntu/Debian)
+# Note: Linux build still uses libcurl (not applicable for Windows 32-bit builds)
 sudo apt-get install libcurl4-openssl-dev
 
 # Build
@@ -161,8 +159,8 @@ chmod +x build.sh
 ### Windows 32-bit Build
 
 ```cmd
-REM Install MinGW-w64 with libcurl support
-REM Or use MSVC with curl library
+REM No external dependencies needed - WinHTTP is part of Windows SDK
+REM Only requires MinGW-w64 compiler
 
 REM Build
 build_windows.bat

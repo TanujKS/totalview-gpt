@@ -8,9 +8,13 @@
 #include <chrono>
 #include <functional>
 #include <cstdio>
-#include <curl/curl.h>
+#include <windows.h>
+#include <winhttp.h>
+#include <wchar.h>
 #include "httplib.h"
 #include "json.hpp"
+
+#pragma comment(lib, "winhttp.lib")
 
 using json = nlohmann::json;
 
@@ -60,13 +64,29 @@ static std::string load_config(const std::string& config_path) {
   return api_key;
 }
 
-// Callback function for libcurl to write response data
-static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-  ((std::string*)userp)->append((char*)contents, size * nmemb);
-  return size * nmemb;
+// Helper function to convert UTF-8 string to wide string
+static std::wstring utf8_to_wstring(const std::string& str) {
+  if (str.empty()) return std::wstring();
+  int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
+  if (size_needed <= 0) return std::wstring();
+  std::wstring wstr(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size_needed);
+  wstr.resize(size_needed - 1); // Remove null terminator
+  return wstr;
 }
 
-// Function to call OpenAI API using libcurl with retry logic
+// Helper function to convert wide string to UTF-8 string
+static std::string wstring_to_utf8(const std::wstring& wstr) {
+  if (wstr.empty()) return std::string();
+  int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+  if (size_needed <= 0) return std::string();
+  std::string str(size_needed, 0);
+  WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size_needed, NULL, NULL);
+  str.resize(size_needed - 1); // Remove null terminator
+  return str;
+}
+
+// Function to call OpenAI API using WinHTTP with retry logic
 static std::pair<int, std::string> call_openai_api(const std::string& api_key, const std::string& request_body) {
   const int max_retries = 3;
   const int retry_delay_ms = 1000;
@@ -76,39 +96,35 @@ static std::pair<int, std::string> call_openai_api(const std::string& api_key, c
   log(2, "Request body: " + request_body);
 
   while (retry_count <= max_retries) {
-    CURL* curl = nullptr;
-    CURLcode res;
+    HINTERNET hSession = nullptr;
+    HINTERNET hConnect = nullptr;
+    HINTERNET hRequest = nullptr;
+    DWORD dwStatusCode = 0;
+    DWORD dwStatusCodeSize = sizeof(dwStatusCode);
     std::string response_string;
-    long response_code = 0;
+    bool success = false;
 
-    curl = curl_easy_init();
-    if (!curl) {
-      log(0, "Failed to initialize curl");
-      json error_json = {{"error", "Failed to initialize curl"}};
+    // Initialize WinHTTP session
+    hSession = WinHttpOpen(L"TotalView-GPT/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, 
+                           WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) {
+      log(0, "Failed to initialize WinHTTP session");
+      json error_json = {{"error", "Failed to initialize WinHTTP session"}};
       return std::make_pair(500, error_json.dump());
     }
 
-    struct curl_slist* headers = nullptr;
-    std::string auth_header = "Authorization: Bearer " + api_key;
-    headers = curl_slist_append(headers, auth_header.c_str());
-    headers = curl_slist_append(headers, "Content-Type: application/json");
+    // Set timeout to 60 seconds (60000 milliseconds)
+    DWORD timeout = 60000;
+    WinHttpSetTimeouts(hSession, timeout, timeout, timeout, timeout);
+    WinHttpSetOption(hSession, WINHTTP_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
 
-    curl_easy_setopt(curl, CURLOPT_URL, "https://api.openai.com/v1/chat/completions");
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body.c_str());
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
-
-    res = curl_easy_perform(curl);
-    
-    if (res != CURLE_OK) {
-      std::string error_msg = curl_easy_strerror(res);
-      curl_slist_free_all(headers);
-      curl_easy_cleanup(curl);
-      log(0, "curl_easy_perform() failed: " + std::string(error_msg));
+    // Connect to host
+    std::wstring host_w = utf8_to_wstring("api.openai.com");
+    hConnect = WinHttpConnect(hSession, host_w.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConnect) {
+      DWORD error = GetLastError();
+      WinHttpCloseHandle(hSession);
+      log(0, "Failed to connect to api.openai.com (error: " + std::to_string(error) + ")");
       
       // Retry on network errors
       if (retry_count < max_retries) {
@@ -118,19 +134,151 @@ static std::pair<int, std::string> call_openai_api(const std::string& api_key, c
         continue;
       }
       
-      json error_json = {{"error", "curl_easy_perform() failed: " + std::string(error_msg)}};
+      json error_json = {{"error", "Failed to connect to api.openai.com"}};
       return std::make_pair(502, error_json.dump());
     }
 
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    // Create request
+    std::wstring path_w = utf8_to_wstring("/v1/chat/completions");
+    hRequest = WinHttpOpenRequest(hConnect, L"POST", path_w.c_str(), NULL, 
+                                   WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 
+                                   WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+      WinHttpCloseHandle(hConnect);
+      WinHttpCloseHandle(hSession);
+      log(0, "Failed to create WinHTTP request");
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        log(1, "Retrying request (attempt " + std::to_string(retry_count) + "/" + std::to_string(max_retries) + ")...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms * retry_count));
+        continue;
+      }
+      
+      json error_json = {{"error", "Failed to create WinHTTP request"}};
+      return std::make_pair(502, error_json.dump());
+    }
 
-    log(1, "OpenAI API response status: " + std::to_string(response_code));
+    // Prepare headers - each header must end with \r\n
+    std::string headers_str = "Content-Type: application/json\r\n";
+    headers_str += "Authorization: Bearer " + api_key + "\r\n";
+    std::wstring headers_w = utf8_to_wstring(headers_str);
+    
+    // Add headers
+    if (!WinHttpAddRequestHeaders(hRequest, headers_w.c_str(), -1, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE)) {
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      WinHttpCloseHandle(hSession);
+      log(0, "Failed to add request headers");
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        log(1, "Retrying request (attempt " + std::to_string(retry_count) + "/" + std::to_string(max_retries) + ")...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms * retry_count));
+        continue;
+      }
+      
+      json error_json = {{"error", "Failed to add request headers"}};
+      return std::make_pair(502, error_json.dump());
+    }
+
+    // Send request with body
+    if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, 
+                            (LPVOID)request_body.c_str(), (DWORD)request_body.size(), 
+                            (DWORD)request_body.size(), 0)) {
+      DWORD error = GetLastError();
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      WinHttpCloseHandle(hSession);
+      log(0, "WinHttpSendRequest() failed (error: " + std::to_string(error) + ")");
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        log(1, "Retrying request (attempt " + std::to_string(retry_count) + "/" + std::to_string(max_retries) + ")...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms * retry_count));
+        continue;
+      }
+      
+      json error_json = {{"error", "WinHttpSendRequest() failed"}};
+      return std::make_pair(502, error_json.dump());
+    }
+
+    // Receive response
+    if (!WinHttpReceiveResponse(hRequest, NULL)) {
+      DWORD error = GetLastError();
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      WinHttpCloseHandle(hSession);
+      log(0, "WinHttpReceiveResponse() failed (error: " + std::to_string(error) + ")");
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        log(1, "Retrying request (attempt " + std::to_string(retry_count) + "/" + std::to_string(max_retries) + ")...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms * retry_count));
+        continue;
+      }
+      
+      json error_json = {{"error", "WinHttpReceiveResponse() failed"}};
+      return std::make_pair(502, error_json.dump());
+    }
+
+    // Get status code
+    if (!WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, 
+                             WINHTTP_HEADER_NAME_BY_INDEX, &dwStatusCode, &dwStatusCodeSize, 
+                             WINHTTP_NO_HEADER_INDEX)) {
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      WinHttpCloseHandle(hSession);
+      log(0, "Failed to get response status code");
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        log(1, "Retrying request (attempt " + std::to_string(retry_count) + "/" + std::to_string(max_retries) + ")...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms * retry_count));
+        continue;
+      }
+      
+      json error_json = {{"error", "Failed to get response status code"}};
+      return std::make_pair(502, error_json.dump());
+    }
+
+    // Read response body
+    DWORD dwBytesAvailable = 0;
+    DWORD dwBytesRead = 0;
+    char buffer[8192];
+
+    do {
+      // Query available data
+      if (!WinHttpQueryDataAvailable(hRequest, &dwBytesAvailable)) {
+        break; // No more data or error
+      }
+      
+      if (dwBytesAvailable == 0) {
+        break; // No more data
+      }
+      
+      // Read data (read available bytes or buffer size, whichever is smaller)
+      DWORD bytes_to_read = (dwBytesAvailable < sizeof(buffer)) ? dwBytesAvailable : sizeof(buffer);
+      if (!WinHttpReadData(hRequest, buffer, bytes_to_read, &dwBytesRead)) {
+        break; // Error reading data
+      }
+      
+      // Append read data to response string
+      if (dwBytesRead > 0) {
+        response_string.append(buffer, dwBytesRead);
+      }
+    } while (dwBytesAvailable > 0);
+
+    // Cleanup
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    log(1, "OpenAI API response status: " + std::to_string(dwStatusCode));
     log(2, "Response body: " + response_string);
 
     // Handle rate limiting (HTTP 429) with exponential backoff
-    if (response_code == 429) {
+    if (dwStatusCode == 429) {
       if (retry_count < max_retries) {
         retry_count++;
         int delay = retry_delay_ms * (1 << retry_count); // Exponential backoff: 2s, 4s, 8s
@@ -141,7 +289,7 @@ static std::pair<int, std::string> call_openai_api(const std::string& api_key, c
     }
 
     // Return immediately for non-429 responses
-    return std::make_pair(static_cast<int>(response_code), response_string);
+    return std::make_pair(static_cast<int>(dwStatusCode), response_string);
   }
 
   // Should not reach here, but handle it
@@ -152,16 +300,9 @@ static std::pair<int, std::string> call_openai_api(const std::string& api_key, c
 // Main implementation (exception-free)
 // Returns 0 on success, non-zero on error
 static int main_impl() {
-  // Initialize libcurl
-  if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-    log(0, "Failed to initialize curl");
-    return 1;
-  }
-
   // Load configuration
   std::string openai_api_key = load_config("config.json");
   if (openai_api_key.empty()) {
-    curl_global_cleanup();
     return 1;
   }
 
@@ -255,7 +396,7 @@ static int main_impl() {
 
     std::string request_body = openai_request.dump();
     
-    // Call OpenAI API using libcurl (with retry logic)
+    // Call OpenAI API using WinHTTP (with retry logic)
     auto api_result = call_openai_api(openai_api_key, request_body);
     int status_code = api_result.first;
     std::string response_body = api_result.second;
@@ -332,9 +473,6 @@ static int main_impl() {
   log(1, "Server starting on http://0.0.0.0:8080");
   
   bool listen_success = svr.listen("0.0.0.0", 8080);
-  
-  // Cleanup libcurl
-  curl_global_cleanup();
   
   if (!listen_success) {
     log(0, "Failed to start server on port 8080");
