@@ -115,7 +115,7 @@ What is causing these errors, and what is the configuration that will fix this?
 
 ### API Communication
 
-- **Endpoint**: `http://localhost:8080/chat`
+- **Endpoint**: `http://{config.backendHost}:{config.backendPort}/chat`
 - **Method**: POST
 - **Request Format**:
   ```json
