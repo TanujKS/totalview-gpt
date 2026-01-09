@@ -16,7 +16,6 @@ The implementation demonstrates:
 ## Key Features
 
 - **Light-themed, minimal UI**: Clean, modern design with light color scheme
-- **Multiple monitoring pages**: Dashboard, Network Status, and Device Details views
 - **Persistent ChatGPT button**: Floating action button visible on all pages
 - **Network data input form**: Comprehensive form for entering device information
 - **Multi-turn conversations**: Maintains conversation history during chat sessions
@@ -83,28 +82,6 @@ const openChat = () => {
 - Layout (and chat button) persist across route changes
 - State is managed at Layout level, not page level
 
-## Example Pages
-
-These pages represent **example pages** from the real TotalView frontend. They demonstrate how the persistent ChatGPT button would appear and function across different monitoring screens. In the actual TotalView application, these would be replaced with real monitoring pages, but the Chat button implementation would work identically.
-
-### Dashboard (`/`) - Example Page
-- Overview statistics (Total Devices, Network Health, Active Alerts, Bandwidth Usage)
-- Recent activity feed with timestamps
-- **Demonstrates**: Chat button persistence on dashboard-style pages
-
-### Network Status (`/network`) - Example Page
-- Table view of network interfaces
-- Device status overview cards
-- Interface error statistics
-- **Demonstrates**: Chat button persistence on data table pages
-
-### Device Details (`/device`) - Example Page
-- Detailed device information
-- Interface-specific error details
-- Configuration examples
-- **Demonstrates**: Chat button persistence on detail view pages
-
-**Integration Note**: When integrating into the real TotalView frontend, replace these example pages with actual TotalView monitoring pages, but keep the Layout component and Chat button implementation. The Chat button will persist across all pages just as it does in these examples.
 
 ## ChatGPT Integration
 
