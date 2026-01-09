@@ -17,7 +17,7 @@ The backend is a lightweight, embeddable HTTP server built with ISO C++17. It ha
 
 ## External Dependencies
 
-The backend currently relies on two external libraries and one Windows API:
+The backend currently relies on one external library and Windows APIs:
 
 ### 1. WinHTTP (Windows HTTP Services API)
 **Purpose**: HTTP/HTTPS client for communicating with OpenAI API (Windows built-in, no external dependencies)
@@ -42,24 +42,29 @@ The backend currently relies on two external libraries and one Windows API:
 
 **Why it's used**: Native Windows API that provides secure HTTPS communication with proper SSL certificate validation and HTTP protocol handling, without requiring external dependencies like libcurl. Perfect for 32-bit Windows builds.
 
-### 2. httplib (`httplib.h`)
-**Purpose**: Simple HTTP server for handling incoming requests
+### 2. Winsock2 (Windows Sockets API)
+**Purpose**: HTTP server implementation using native Windows socket APIs
 
 **Usage**:
-- Creates HTTP server listening on port 8080
+- Creates HTTP server listening on configurable port (default: 3000)
 - Handles POST requests to `/chat` endpoint
+- Handles GET requests to `/health` endpoint
+- Handles OPTIONS requests for CORS preflight
 - Manages CORS headers
-- Processes request/response bodies
+- Processes HTTP request/response parsing
 
-**Key Features Used**:
-- `httplib::Server` - HTTP server instance
-- `svr.Post()` - Register POST route handler
-- `svr.Get()` - Register GET route handler (health check)
-- `svr.Options()` - Register OPTIONS handler (CORS preflight)
-- `httplib::Request` - Request object with body, headers
-- `httplib::Response` - Response object for setting status, content, headers
+**Key Functions Used**:
+- `WSAStartup()` - Initialize Winsock
+- `socket()` - Create server socket
+- `bind()` - Bind socket to port
+- `listen()` - Listen for connections
+- `accept()` - Accept client connections
+- `recv()` - Receive HTTP request data
+- `send()` - Send HTTP response data
+- `closesocket()` - Close socket connections
+- `WSACleanup()` - Cleanup Winsock
 
-**Why it's needed**: Provides a simple, header-only HTTP server without requiring additional runtime dependencies.
+**Why it's used**: Native Windows API for socket operations. We migrated from httplib to Winsock2 for better 32-bit Windows compatibility and to eliminate external dependencies. The HTTP server is implemented using standard Windows socket APIs.
 
 ### 3. nlohmann/json (`json.hpp`)
 **Purpose**: JSON parsing and generation
@@ -79,9 +84,9 @@ The backend currently relies on two external libraries and one Windows API:
 
 **Why it's needed**: JSON is the standard format for API communication and configuration files.
 
-## Building Without External Libraries
+## Dependencies Summary
 
-The backend is already optimized for Windows builds with minimal dependencies:
+The backend is optimized for Windows builds with minimal dependencies:
 
 ### HTTP Client: WinHTTP (Already Implemented)
 
@@ -93,34 +98,19 @@ The code uses WinHTTP API which is built into Windows, so no external dependenci
 - Proper certificate validation
 - No external library installation required
 
-**For Linux builds** (if needed in future):
-- Could use native socket APIs with OpenSSL
-- Or use libcurl (as it's standard on Linux)
+### HTTP Server: Winsock2 (Already Implemented)
 
-### Option 2: Replace httplib
+The code uses Winsock2 API (also built into Windows) for the HTTP server implementation. We migrated from httplib to Winsock2 for better 32-bit Windows compatibility.
 
-**Alternatives**:
-1. **Windows**: Use `httpapi.h` (HTTP Server API)
-   ```cpp
-   #include <http.h>
-   // Use HttpCreateServerSession, HttpCreateRequestQueue, etc.
-   ```
+**Current Implementation**:
+- Uses `winsock2.h` and `ws2tcpip.h` (Windows SDK)
+- Custom HTTP request/response parsing
+- CORS header support
+- Route handling for `/chat`, `/health`, and OPTIONS endpoints
+- No external library installation required
 
-2. **Linux**: Use native socket APIs
-   - Create server socket with `socket()` and `bind()`
-   - Listen with `listen()` and `accept()`
-   - Implement HTTP/1.1 protocol parsing
-   - Handle request routing manually
 
-3. **Cross-platform**: Implement minimal HTTP server
-   - Use platform-specific socket APIs
-   - Parse HTTP request headers and body
-   - Generate HTTP response with proper headers
-   - Handle routing and CORS
-
-**Complexity**: Medium - requires HTTP protocol implementation, but simpler than HTTP client.
-
-### Option 3: Replace nlohmann/json
+### Option 1: Replace nlohmann/json (if needed)
 
 **Alternatives**:
 1. **Manual parsing**: Write recursive descent parser
@@ -141,31 +131,17 @@ The code uses WinHTTP API which is built into Windows, so no external dependenci
 
 ## Build Instructions
 
-### Linux Build
-
-```bash
-# Install dependencies (Ubuntu/Debian)
-# Note: Linux build still uses libcurl (not applicable for Windows 32-bit builds)
-sudo apt-get install libcurl4-openssl-dev
-
-# Build
-chmod +x build.sh
-./build.sh
-
-# Run
-./llm_poc
-```
-
 ### Windows 32-bit Build
 
 ```cmd
 REM No external dependencies needed - WinHTTP is part of Windows SDK
 REM Only requires MinGW-w64 compiler
+REM Tested with MINGW32 (MinGW-w64 32-bit) from MSYS2
 
 REM Build
-build_windows.bat
+./build_windows.bat
 
-REM Run
+REM Run from CMD
 llm_poc.exe
 ```
 
@@ -202,9 +178,14 @@ int main() {
 Create `config.json`:
 ```json
 {
-  "openai_api_key": "sk-your-api-key-here"
+  "openai_api_key": "sk-your-api-key-here",
+  "port": 3000
 }
 ```
+
+**Configuration Options**:
+- `openai_api_key` (required): Your OpenAI API key
+- `port` (optional, default: 3000): Port number for the HTTP server to listen on
 
 ## API Endpoints
 

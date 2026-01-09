@@ -93,6 +93,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import config from '../config.js'
 
 const props = defineProps({
   isOpen: Boolean
@@ -225,7 +226,7 @@ const sendChatRequest = async (userMessage, systemMessage) => {
         content: msg.content
       }))
 
-    const response = await fetch('http://localhost:8080/chat', {
+    const response = await fetch(config.getApiUrl(config.endpoints.chat), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

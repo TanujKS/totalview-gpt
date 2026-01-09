@@ -46,7 +46,7 @@ This project meets the following technical requirements:
          ▼
 ┌─────────────────┐
 │  C++ Backend    │
-│  (Port 8080)    │
+│  (Port 3000)    │
 │                 │
 │  ┌───────────┐  │
 │  │Retry Logic│  │
@@ -68,7 +68,6 @@ totalview-gpt/
 │   ├── main.cpp      # Main server implementation
 │   ├── main.h        # Header for embedded use
 │   ├── config.json   # Configuration (API key)
-│   ├── build.sh      # Linux build script
 │   └── build_windows.bat  # Windows 32-bit build script
 ├── frontend/         # Vue.js web application (example pages)
 │   ├── src/
@@ -89,9 +88,8 @@ totalview-gpt/
 ### Prerequisites
 
 - **Backend**:
-  - C++17 compatible compiler (g++ or MSVC)
-  - libcurl development libraries
-  - OpenSSL (for HTTPS)
+  - C++17 compatible compiler (MinGW-w64 or MSVC)
+  - **Windows 32-bit**: No external dependencies - uses WinHTTP (built into Windows) for HTTP client and Winsock2 for HTTP server
 
 - **Frontend**:
   - Node.js 20.19.0+ or 22.12.0+
@@ -114,28 +112,19 @@ totalview-gpt/
    ```
 
 2. **Build the executable** (required before running):
-
-   **For Linux**:
-   ```bash
-   cd backend
-   chmod +x build.sh
-   ./build.sh
-   ```
-   This will create the `llm_poc` executable.
-
-   **For Windows (32-bit)**:
    ```cmd
    cd backend
    build_windows.bat
    ```
    This will create the `llm_poc.exe` executable.
+   **Note**: Tested with MINGW32 (MinGW-w64 32-bit) from MSYS2.
 
 3. **Run the server**:
-   ```bash
-   ./llm_poc  # or llm_poc.exe on Windows
+   ```cmd
+   llm_poc.exe
    ```
    
-   Server will start on `http://localhost:8080`
+   Server will start on `http://localhost:3000` (or port configured in config.json)
 
 ### Frontend Setup
 
@@ -160,17 +149,15 @@ totalview-gpt/
 ### Testing the Full Pipeline
 
 1. **Build and start the backend** (if not already built):
-   ```bash
+   ```cmd
    cd backend
    # Build the executable first (if not already built)
-   chmod +x build.sh
-   ./build.sh  # Linux
-   # OR build_windows.bat  # Windows
+   build_windows.bat
    
    # Then run the server
-   ./llm_poc  # or llm_poc.exe on Windows
+   llm_poc.exe
    ```
-   You should see: `Server starting on http://0.0.0.0:8080`
+   You should see: `Server starting on http://0.0.0.0:3000` (or configured port)
    
    **Note**: Make sure the `llm_poc` executable exists (it's built by the build script and not included in the repository).
 
@@ -260,9 +247,14 @@ CORS preflight handler.
 Backend configuration is stored in `backend/config.json`:
 ```json
 {
-  "openai_api_key": "sk-your-api-key-here"
+  "openai_api_key": "sk-your-api-key-here",
+  "port": 3000
 }
 ```
+
+**Configuration Options**:
+- `openai_api_key` (required): Your OpenAI API key
+- `port` (optional, default: 3000): Port number for the HTTP server to listen on
 
 ## Development Notes
 
