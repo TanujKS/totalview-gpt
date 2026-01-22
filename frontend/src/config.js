@@ -15,16 +15,11 @@
 export const config = {
   // Backend server address (default: localhost)
   // Override with VITE_BACKEND_HOST environment variable
-  backendHost: import.meta.env.VITE_BACKEND_HOST || 'localhost',
-  
-  // Backend server port (default: 3000)
-  // Override with VITE_BACKEND_PORT environment variable
-  // Should match the port in backend/config.json
-  backendPort: import.meta.env.VITE_BACKEND_PORT || '3000',
+  backendHost: 'https://totalview.tanuj.xyz',
   
   // Build the full backend URL
   get backendUrl() {
-    return `http://${this.backendHost}:${this.backendPort}`
+    return `${this.backendHost}`
   },
   
   // Backend API endpoints
