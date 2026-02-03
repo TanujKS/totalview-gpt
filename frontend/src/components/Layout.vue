@@ -1,16 +1,6 @@
 <template>
   <div class="layout">
-    <header class="header">
-      <div class="header-content">
-        <h1 class="logo">TotalView</h1>
-        <nav class="nav">
-          <router-link to="/" class="nav-link">Dashboard</router-link>
-          <router-link to="/network" class="nav-link">Network Status</router-link>
-          <router-link to="/device" class="nav-link">Device Details</router-link>
-        </nav>
-      </div>
-    </header>
-
+    <Header />
     <main class="main-content">
       <router-view />
     </main>
@@ -29,6 +19,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import Header from './Header.vue'
 import ChatWindow from './ChatWindow.vue'
 
 const chatOpen = ref(false)
@@ -48,51 +39,6 @@ const closeChat = () => {
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
-}
-
-.header {
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 16px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logo {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
-}
-
-.nav {
-  display: flex;
-  gap: 24px;
-}
-
-.nav-link {
-  text-decoration: none;
-  color: #666;
-  font-weight: 500;
-  padding: 8px 0;
-  transition: color 0.2s;
-  border-bottom: 2px solid transparent;
-}
-
-.nav-link:hover {
-  color: #4a90e2;
-}
-
-.nav-link.router-link-active {
-  color: #4a90e2;
-  border-bottom-color: #4a90e2;
 }
 
 .main-content {

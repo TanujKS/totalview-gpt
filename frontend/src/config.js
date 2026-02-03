@@ -31,6 +31,15 @@ export const config = {
   // Get full API endpoint URL
   getApiUrl(endpoint) {
     return `${this.backendUrl}${endpoint}`
+  },
+
+  // VM Manager (Cloud Run) - manages GCE instance for the chat backend
+  // Override with VITE_VM_MANAGER_URL and VITE_VM_MANAGER_API_KEY
+  vmManagerUrl: 'https://totalview-manager-535805016190.us-central1.run.app',
+  vmManagerApiKey: import.meta.env.VITE_VM_MANAGER_API_KEY || '',
+  getVmManagerUrl(path) {
+    const base = this.vmManagerUrl.replace(/\/$/, '')
+    return `${base}${path?.startsWith('/') ? path : `/${path || ''}`}`
   }
 }
 
