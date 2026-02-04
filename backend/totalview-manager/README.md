@@ -1,0 +1,1 @@
+This is deployed as a Cloud Run function deployed in-line to save on costs as the VM instance no longer has to run 24/7.

@@ -1,0 +1,20 @@
+{
+    "name": "vm-control",
+    "description": "Simple PoC service to start/stop a GCE VM via HTTP endpoints",
+    "version": "1.0.0",
+    "private": true,
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+      "start": "node index.js"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+      "@google-cloud/compute": "^4.0.0",
+      "express": "^4.18.2"
+    }
+  }
+  
