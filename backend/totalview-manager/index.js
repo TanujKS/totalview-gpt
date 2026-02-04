@@ -27,12 +27,30 @@ const PROJECT_ID = process.env.PROJECT_ID;
 const ZONE = process.env.ZONE;
 const INSTANCE_NAME = process.env.INSTANCE_NAME;
 
-// Simple PoC auth
+// Simple PoC auth: API_KEY (env) or demo password for site access
 const API_KEY = process.env.API_KEY;
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD;
+
+// Optional: post VM start/stop to Discord
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
+
+async function postToDiscord(content) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  try {
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  } catch (err) {
+    console.error("Discord webhook error:", err?.message || err);
+  }
+}
 
 function requireApiKey(req, res) {
   const provided = req.get("x-api-key");
-  if (!API_KEY || provided !== API_KEY) {
+  const valid = provided === API_KEY || provided === DEMO_PASSWORD;
+  if (!valid) {
     res.status(401).json({ ok: false, error: "unauthorized" });
     return false;
   }
@@ -55,6 +73,15 @@ app.get("/", (req, res) => {
   res.json({ ok: true, service: "vm-control" });
 });
 
+// PoC auth: verify password (used by frontend login)
+app.post("/auth", (req, res) => {
+  const password = req.body?.password;
+  if (password === DEMO_PASSWORD) {
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ ok: false, error: "unauthorized" });
+});
+
 // Start VM
 app.post("/start", async (req, res) => {
   try {
@@ -67,6 +94,7 @@ app.post("/start", async (req, res) => {
       instance: INSTANCE_NAME,
     });
 
+    await postToDiscord(`VM **started**: \`${INSTANCE_NAME}\` (${ZONE})`);
     res.json({ ok: true, action: "starting" });
   } catch (err) {
     console.error(err);
@@ -86,6 +114,7 @@ app.post("/stop", async (req, res) => {
       instance: INSTANCE_NAME,
     });
 
+    await postToDiscord(`VM **stopped**: \`${INSTANCE_NAME}\` (${ZONE})`);
     res.json({ ok: true, action: "stopping" });
   } catch (err) {
     console.error(err);

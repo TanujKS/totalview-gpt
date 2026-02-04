@@ -53,6 +53,7 @@
         >
           Stop
         </button>
+        <button class="vm-btn logout-btn" @click="logout" title="Sign out">Sign out</button>
       </div>
     </div>
   </header>
@@ -61,6 +62,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import config from '../config.js'
+import { getAuthPassword, clearAuth } from '../auth.js'
 
 const vmStatus = ref(null)
 const statusError = ref(null)
@@ -98,13 +100,24 @@ const stopDisabled = computed(
   () => actionLoading.value || statusLoading.value || isTransitioning.value || vmStatus.value?.status !== 'RUNNING'
 )
 
+function vmApiKey() {
+  return getAuthPassword() || config.vmManagerApiKey || ''
+}
+
+function logout() {
+  clearAuth()
+  window.location.href = '/login'
+}
+
 async function fetchStatus() {
   if (!config.vmManagerUrl) return
+  const key = vmApiKey()
+  if (!key) return
   statusLoading.value = true
   statusError.value = null
   try {
     const res = await fetch(config.getVmManagerUrl('/status'), {
-      headers: config.vmManagerApiKey ? { 'x-api-key': config.vmManagerApiKey } : {}
+      headers: { 'x-api-key': key }
     })
     const data = await res.json()
     if (!data.ok) throw new Error(data.error ?? 'Request failed')
@@ -126,7 +139,7 @@ async function startVm() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(config.vmManagerApiKey ? { 'x-api-key': config.vmManagerApiKey } : {})
+        'x-api-key': vmApiKey()
       }
     })
     const data = await res.json()
@@ -148,7 +161,7 @@ async function stopVm() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(config.vmManagerApiKey ? { 'x-api-key': config.vmManagerApiKey } : {})
+        'x-api-key': vmApiKey()
       }
     })
     const data = await res.json()
@@ -333,5 +346,58 @@ onMounted(() => {
 .stop-btn:hover:not(:disabled) {
   background: #c82333;
   border-color: #bd2130;
+}
+
+.logout-btn {
+  background: #6c757d;
+  color: white;
+  border-color: #6c757d;
+  margin-left: 8px;
+}
+
+.logout-btn:hover:not(:disabled) {
+  background: #5a6268;
+  border-color: #545b62;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 12px 16px;
+  }
+
+  .nav {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .nav-link {
+    padding: 10px 0;
+  }
+
+  .vm-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .vm-label {
+    white-space: normal;
+  }
+
+  .status-pill-wrapper {
+    justify-content: flex-start;
+  }
+
+  .vm-controls .vm-btn {
+    margin-left: 0;
+  }
+
+  .logout-btn {
+    margin-left: 0;
+  }
 }
 </style>

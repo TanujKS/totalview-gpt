@@ -94,6 +94,7 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue'
 import config from '../config.js'
+import { getAuthPassword } from '../auth.js'
 
 const props = defineProps({
   isOpen: Boolean
@@ -152,6 +153,29 @@ const scrollToBottom = async () => {
   }
 }
 
+const vmNotRunningMessage = 'The GPT server VM is not running. Please start it from the header to use chat.'
+
+async function getVmStatus() {
+  if (!config.vmManagerUrl) return null
+  const key = getAuthPassword() || config.vmManagerApiKey || ''
+  if (!key) return null
+  try {
+    const res = await fetch(config.getVmManagerUrl('/status'), {
+      headers: { 'x-api-key': key }
+    })
+    const data = await res.json()
+    return data.ok ? (data.status || '').toUpperCase() : null
+  } catch {
+    return null
+  }
+}
+
+async function ensureVmRunning() {
+  const status = await getVmStatus()
+  if (status === null) return true // no VM manager or check failed; allow request
+  return status === 'RUNNING'
+}
+
 const buildSystemMessage = () => {
   return 'You are a network administrator'
 }
@@ -188,6 +212,12 @@ const startChat = async () => {
     return
   }
 
+  const vmOk = await ensureVmRunning()
+  if (!vmOk) {
+    alert(vmNotRunningMessage)
+    return
+  }
+
   showForm.value = false
   conversationId.value = `conv_${Date.now()}`
   
@@ -205,6 +235,13 @@ const startChat = async () => {
 
 const sendMessage = async () => {
   if (!currentMessage.value.trim() || loading.value) return
+
+  const vmOk = await ensureVmRunning()
+  if (!vmOk) {
+    messages.value.push({ role: 'assistant', content: vmNotRunningMessage })
+    await scrollToBottom()
+    return
+  }
 
   const userMsg = currentMessage.value.trim()
   messages.value.push({ role: 'user', content: userMsg })
